@@ -10,10 +10,10 @@ from torch.optim import Adam
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 
-from hrl.agent.dynamics.dynamics_model import DynamicsModel
-from hrl.agent.dynamics.dynamics_model import DynamicsModel
-from hrl.agent.dynamics.replay_buffer import ReplayBuffer
-from hrl.mdp.GoalDirectedMDPClass import GoalDirectedMDP
+from agent.dynamics.dynamics_model import DynamicsModel
+from agent.dynamics.dynamics_model import DynamicsModel
+from agent.dynamics.replay_buffer import ReplayBuffer
+from mdp.GoalDirectedMDPClass import GoalDirectedMDP
 
 from tqdm import tqdm
 import ipdb
@@ -34,7 +34,7 @@ class MPC:
 
         self.model = DynamicsModel(self.state_size, self.action_size, self.device)
         self.model.to(self.device)
-        
+
         self.replay_buffer = ReplayBuffer(obs_dim=state_size, act_dim=action_size, size=int(3e5))
 
         if multithread:
@@ -52,13 +52,13 @@ class MPC:
         training_gen = DataLoader(self.dataset, batch_size=batch_size, num_workers=self.workers, shuffle=True,  pin_memory=True)
         loss_function = nn.MSELoss().to(self.device)
         optimizer = Adam(self.model.parameters(), lr=1e-3)
-        
+
         for epoch in tqdm(range(epochs), desc=f'Training MPC model on {self.replay_buffer.size} points'):
             for states, actions, states_p in training_gen:
                 states = states.to(self.device).float()
                 actions = actions.to(self.device).float()
                 states_p = states_p.to(self.device).float()
-            
+
                 optimizer.zero_grad()
                 p = self.model.forward(states, actions)
                 loss = loss_function(p, states_p)
@@ -71,7 +71,7 @@ class MPC:
 
         while not mdp.sparse_gc_reward_function(s, goal, {})[1]:
             action = self.act(s, goal, num_rollouts=num_rollouts, num_steps=num_steps)
-        
+
             # execute action in mdp
             mdp.execute_agent_action(action)
 
@@ -92,7 +92,7 @@ class MPC:
 
         while not mdp.sparse_gc_reward_function(s, goal, {})[1]:
             action = self.act(s, goal, num_rollouts, num_steps)
-        
+
             # execute action in mdp
             mdp.execute_agent_action(action)
 
@@ -154,7 +154,7 @@ class MPC:
         torch_actions = 2 * torch.rand((num_rollouts, num_steps, self.action_size), device=self.device) - 1
         torch_states = torch.tensor(s.features(), device=self.device).repeat(num_rollouts, 1)
         pred = torch.zeros((num_rollouts, self.state_size, num_steps), device=self.device)
-        
+
         goals = np.repeat([goal], num_rollouts, axis=0)
         costs = np.zeros((num_rollouts, num_steps))
 
@@ -212,7 +212,7 @@ class MPC:
         assert actions.shape[1] == self.action_size, f"{actions.shape}"
 
         states_delta = np.array(states_p) - np.array(states)
-        
+
         self.mean_x = np.mean(states, axis=0)
         self.mean_y = np.mean(actions, axis=0)
         self.mean_z = np.mean(states_delta, axis=0)
@@ -257,9 +257,9 @@ class RolloutDataset(Dataset):
         self.states = states
         self.actions = actions
         self.states_p = states_p
-    
+
     def __len__(self):
         return len(self.states)
-    
+
     def __getitem__(self, idx):
         return self.states[idx], self.actions[idx], self.states_p[idx]
