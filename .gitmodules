@@ -1,3 +1,0 @@
-[submodule "random-network-distillation-pytorch"]
-	path = rnd
-	url = git@github.com:jason-crowley/random-network-distillation-pytorch.git
