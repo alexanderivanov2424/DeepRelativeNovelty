@@ -16,7 +16,6 @@ from agent.dynamics.replay_buffer import ReplayBuffer
 from mdp.GoalDirectedMDPClass import GoalDirectedMDP
 
 from tqdm import tqdm
-import ipdb
 
 class MPC:
     def __init__(self, mdp, state_size, action_size, dense_reward, device, multithread=False):

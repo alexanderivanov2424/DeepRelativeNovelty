@@ -1,8 +1,8 @@
 import numpy as np
 from scipy.spatial import distance
-from hrl.mdp.MDPClass import MDP
-from hrl.mdp.StateClass import State
-from hrl.mdp.SalientEventClass import SalientEvent
+from mdp.MDPClass import MDP
+from mdp.StateClass import State
+from mdp.SalientEventClass import SalientEvent
 
 
 class GoalDirectedMDP(MDP):
@@ -68,7 +68,7 @@ class GoalDirectedMDP(MDP):
 
         rewards = -distances
         rewards[dones==1] = 0.
-        
+
         return rewards, dones
 
     def _initialize_salient_events(self):
@@ -147,7 +147,7 @@ class GoalDirectedMDP(MDP):
             position = state.position if isinstance(state, State) else state[:2]
             return position
         return None
-    
+
     @staticmethod
     def batched_get_position(state_matrix):
         assert isinstance(state_matrix, np.ndarray)

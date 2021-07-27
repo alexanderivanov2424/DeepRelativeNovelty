@@ -1,8 +1,7 @@
 import numpy as np
-from hrl.mdp.StateClass import State
+from mdp.StateClass import State
 from scipy.spatial import distance
 from sklearn.svm import OneClassSVM
-import ipdb
 
 
 
@@ -283,4 +282,3 @@ class DSCOptionSalientEvent(SalientEvent):
         if other.get_target_position() is not None:
             return self.point_to_set_distance(other.get_target_position(), self.trigger_points)
         return self.set_to_set_distance(self.trigger_points, other.trigger_points)
-

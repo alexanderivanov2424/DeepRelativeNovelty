@@ -11,6 +11,7 @@ from torch.multiprocessing import Pipe, Process
 
 from model import *
 from config import *
+from utils import *
 from PIL import Image
 
 train_method = default_config['TrainMethod']
@@ -113,10 +114,11 @@ class MontezumaInfoWrapper(gym.Wrapper):
     def reset(self):
         return self.env.reset()
 
-
 class AtariEnvironment(Environment):
     def __init__(
             self,
+            drn_model,
+            obs_rms,
             env_id,
             is_render,
             env_idx,
@@ -132,6 +134,11 @@ class AtariEnvironment(Environment):
         self.env = MaxAndSkipEnv(gym.make(env_id), is_render)
         if 'Montezuma' in env_id:
             self.env = MontezumaInfoWrapper(self.env, room_address=3 if 'Montezuma' in env_id else 1)
+
+        self.drn_model = drn_model
+        self.trajectory = []
+        self.obs_rms = obs_rms
+
         self.env_id = env_id
         self.is_render = is_render
         self.env_idx = env_idx
@@ -180,16 +187,23 @@ class AtariEnvironment(Environment):
             self.rall += reward
             self.steps += 1
 
+            traj = None
             if done:
                 self.recent_rlist.append(self.rall)
                 print("[Episode {}({})] Step: {}  Reward: {}  Recent Reward: {}  Visited Room: [{}]".format(
                     self.episode, self.env_idx, self.steps, self.rall, np.mean(self.recent_rlist),
                     info.get('episode', {}).get('visited_rooms', {})))
 
+                traj = self.trajectory[:]
+                self.trajectory = []
+
                 self.history = self.reset()
 
+            # self.trajectory.append((self.history[:, :, :])[-1, :, :].reshape([1, 84, 84]))
+            self.trajectory.append(np.array(self.history))
+
             self.child_conn.send(
-                [self.history[:, :, :], reward, force_done, done, log_reward, info])
+                [self.history[:, :, :], reward, force_done, done, log_reward, info, traj])
 
     def reset(self):
         self.last_action = 0
@@ -199,6 +213,7 @@ class AtariEnvironment(Environment):
         s = self.env.reset()
         self.get_init_state(
             self.pre_proc(s))
+
         return self.history[:, :, :]
 
     def pre_proc(self, X):

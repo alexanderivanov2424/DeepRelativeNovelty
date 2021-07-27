@@ -7,6 +7,10 @@ import torch.optim as optim
 
 from model import RNDModel
 
+import time
+
+import queue
+
 
 def global_grad_norm_(parameters, norm_type=2):
     r"""Clips gradient norm of an iterable of parameters.
@@ -59,6 +63,14 @@ class RNDAgent:
         self.optimizer = optim.Adam(self.rnd.predictor.parameters(), lr=learning_rate)
 
         self.rnd = self.rnd.to(self.device)
+
+        def init_weights(m):
+            if type(m) == nn.Linear:
+                torch.nn.init.xavier_uniform(m.weight)
+                m.bias.data.fill_(0.01)
+
+        self.rnd.predictor.apply(init_weights)
+        self.rnd.target.apply(init_weights)
 
     def forward(self, obs):
         obs = torch.as_tensor(obs, dtype=torch.float)
@@ -114,6 +126,12 @@ class DeepRelNov:
 
         self.rel_nov_percentile = rel_nov_percentile
         self.rel_nov_thresh = 10#100
+
+        self.train_nov_rnd = False
+        if nov_rnd is None:
+            self.train_nov_rnd = True
+            self.state_buf = deque(maxlen=100)
+            nov_rnd = RNDModel(input_size, output_size)
         self.nov_rnd = RNDAgent(nov_rnd, use_cuda=use_cuda)
 
         self.freq_percentile = freq_percentile
@@ -122,7 +140,31 @@ class DeepRelNov:
 
         self.rel_nov_state_buf = deque(maxlen=100)
 
+        self.last_trajectory = None
+
+        self.training_buffer = []
+
+        self.training_iterations = 0
+        self.pretraining_duration = 1000
+
+
+    def is_drn_trained(self):
+        return self.training_iterations >= self.pretraining_duration
+
+    def add_to_train_buffer(self, trajectory):
+        self.training_buffer.append(trajectory)
+        self.last_trajectory = trajectory
+
+    def train_from_buffer(self):
+        for traj in self.training_buffer:
+            self.train_rel_nov(traj)
+        self.training_buffer = []
+
     def train_rel_nov(self, trajectory):
+        self.training_iterations += 1
+        if self.train_nov_rnd:
+            self.state_buf.extend(trajectory)
+            self.nov_rnd.train(self.state_buf)
         nov_vals = self.get_nov_vals(trajectory)
         rel_nov_vals = self.get_rel_nov_vals(trajectory, nov_vals)
         self.update_rel_nov_thresh(rel_nov_vals)
@@ -187,6 +229,9 @@ class DeepRelNov:
         V = M[1:] > M[:-1]
         I = [x + 1 for x in np.where(V[1:] < V[:-1])[0]]
         return I[1:]
+
+    def get_latest_subgoals(self):
+        return self.get_subgoals(self.last_trajectory)
 
     def get_subgoals(self, trajectory):
         # return self.get_max_subgoals(trajectory)

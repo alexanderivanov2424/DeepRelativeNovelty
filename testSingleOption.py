@@ -335,11 +335,26 @@ def main():
             drn_model.train_rel_nov(obs_traj)
             episode_counter += 1
 
-            if episode_counter % 100 == 0:
+            if episode_counter > 100:
                 subgoals = drn_model.get_filtered_subgoals(obs_traj, 1)
 
-
-                #TODO Make Option
+                option = ModelBasedOption(parent=None, mdp=self.mdp,
+                                  buffer_length=self.buffer_length,
+                                  global_init=True,
+                                  gestation_period=self.gestation_period,
+                                  timeout=200, max_steps=self.max_steps, device=self.device,
+                                  target_salient_event=self.target_salient_event,
+                                  name="global-option",
+                                  path_to_model="",
+                                  global_solver=None,
+                                  use_vf=self.use_vf,
+                                  use_global_vf=self.use_global_vf,
+                                  use_model=self.use_model,
+                                  dense_reward=self.use_dense_rewards,
+                                  global_value_learner=None,
+                                  option_idx=0,
+                                  lr_c=self.lr_c, lr_a=self.lr_a,
+                                  multithread_mpc=self.multithread_mpc)
 
         episode_traj_buffer = []
 
