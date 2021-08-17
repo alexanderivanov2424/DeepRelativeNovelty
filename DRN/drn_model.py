@@ -111,6 +111,7 @@ class DeepRelNov:
     def __init__(
         self,
         nov_rnd,
+        train_nov_rnd,
         input_size,
         output_size,
         use_cuda=False,
@@ -125,12 +126,12 @@ class DeepRelNov:
         self.thresh_lr = 0.1
 
         self.rel_nov_percentile = rel_nov_percentile
-        self.rel_nov_thresh = 10#100
+        self.rel_nov_thresh = 100#100
 
-        self.train_nov_rnd = False
+        self.train_nov_rnd = train_nov_rnd
+        if self.train_nov_rnd:
+            self.state_buf = deque(maxlen=500)
         if nov_rnd is None:
-            self.train_nov_rnd = True
-            self.state_buf = deque(maxlen=100)
             nov_rnd = RNDModel(input_size, output_size)
         self.nov_rnd = RNDAgent(nov_rnd, use_cuda=use_cuda)
 
@@ -141,6 +142,7 @@ class DeepRelNov:
         self.rel_nov_state_buf = deque(maxlen=100)
 
         self.last_trajectory = None
+        # self.last_full_state_trajectory = None
 
         self.training_buffer = []
 
@@ -151,19 +153,21 @@ class DeepRelNov:
     def is_drn_trained(self):
         return self.training_iterations >= self.pretraining_duration
 
-    def add_to_train_buffer(self, trajectory):
-        self.training_buffer.append(trajectory)
-        self.last_trajectory = trajectory
-
-    def train_from_buffer(self):
-        for traj in self.training_buffer:
-            self.train_rel_nov(traj)
-        self.training_buffer = []
+    # def add_to_train_buffer(self, trajectory):
+    #     self.training_buffer.append(trajectory)
+    #     self.last_trajectory = trajectory
+    #
+    # def train_from_buffer(self):
+    #     for traj in self.training_buffer:
+    #         self.train_rel_nov(traj)
+    #     self.training_buffer = []
 
     def train_rel_nov(self, trajectory):
+        self.last_trajectory = trajectory
+        # self.last_full_state_trajectory = full_state_trajectory
         self.training_iterations += 1
         if self.train_nov_rnd:
-            self.state_buf.extend(trajectory)
+            self.state_buf.extend(trajectory[::5])
             self.nov_rnd.train(self.state_buf)
         nov_vals = self.get_nov_vals(trajectory)
         rel_nov_vals = self.get_rel_nov_vals(trajectory, nov_vals)
@@ -178,6 +182,11 @@ class DeepRelNov:
         if len(rel_nov_states) > 0:
             freq_vals = self.freq_rnd.forward(rel_nov_states)
             self.update_freq_thresh(freq_vals)
+
+
+        if self.training_iterations > 500 and self.training_iterations % 50 == 0:
+            self.get_rel_nov_subgoals(trajectory, plot=True)
+
 
     def train_max(self, trajectory):
         nov_vals = self.get_nov_vals(trajectory)
@@ -256,9 +265,10 @@ class DeepRelNov:
         I = I[np.array(I_freq)]
         return nov_states[I_freq], nov_vals[I], None, freq_vals[I_freq], I
 
-    def get_rel_nov_subgoals(self, trajectory):
+    def get_rel_nov_subgoals(self, trajectory, plot=False):
         nov_vals = self.get_nov_vals(trajectory)
         rel_nov_vals = self.get_rel_nov_vals(trajectory, nov_vals)
+
         #I_nov is indexes of rel_nov states in original trajectory
         rel_nov_states, I = self.get_rel_nov_states(rel_nov_vals, trajectory)
         if len(rel_nov_states) == 0:
@@ -270,5 +280,19 @@ class DeepRelNov:
         if len(I) == 0:
             return [], [], [], [], []
 
+
         I = I[I_freq]
+
+        if plot:
+            import matplotlib.pyplot as plt
+            plt.plot(nov_vals)
+            plt.plot(rel_nov_vals)
+            plt.title(I[np.argmax(freq_vals[I_freq])])
+            plt.show()
+            for state in trajectory:
+                plt.imshow(np.sum(state, axis=0))
+                plt.draw()
+                plt.pause(.01)
+                plt.clf()
+
         return rel_nov_states[I_freq], nov_vals[I], rel_nov_vals[I], freq_vals[I_freq], I

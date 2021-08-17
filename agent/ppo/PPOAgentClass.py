@@ -8,13 +8,56 @@ import pfrl
 from pfrl.agents import PPO
 from pfrl.policies import SoftmaxCategoricalHead
 
+class PPOAgentModel(nn.Module):
+    def __init__(self, obs_n_channels, n_actions):
+        super(PPOAgentModel, self).__init__()
+
+        def lecun_init(layer, gain=1):
+            if isinstance(layer, (nn.Conv2d, nn.Linear)):
+                pfrl.initializers.init_lecun_normal(layer.weight, gain)
+                nn.init.zeros_(layer.bias)
+            else:
+                pfrl.initializers.init_lecun_normal(layer.weight_ih_l0, gain)
+                pfrl.initializers.init_lecun_normal(layer.weight_hh_l0, gain)
+                nn.init.zeros_(layer.bias_ih_l0)
+                nn.init.zeros_(layer.bias_hh_l0)
+            return layer
+
+        self.conv1 = lecun_init(nn.Conv2d(obs_n_channels, 32, 8, stride=4))
+        self.relu1 = nn.ReLU()
+        self.conv2 = lecun_init(nn.Conv2d(32, 64, 4, stride=2))
+        self.relu2 = nn.ReLU()
+        self.conv3 = lecun_init(nn.Conv2d(64, 64, 3, stride=1))
+        self.relu3 = nn.ReLU()
+        self.fatten = nn.Flatten()
+        self.nn1 = lecun_init(nn.Linear(3136, 512))
+        self.relu4 = nn.ReLU()
+        self.branch = pfrl.nn.Branched(
+                        nn.Sequential(
+                            lecun_init(nn.Linear(512, n_actions), 1e-2),
+                            nn.Softmax(dim=1),
+                            SoftmaxCategoricalHead(),
+                        ),
+                        lecun_init(nn.Linear(512, 1)),
+                    )
+
+    def forward(self, x):
+        x = self.relu1(self.conv1(x))
+        x = self.relu2(self.conv2(x))
+        x = self.relu3(self.conv3(x))
+        x = self.fatten(x)
+        x = self.relu4(self.nn1(x))
+        x = self.branch(x)
+        return x
+
+
 class PPOAgent(object):
     def __init__(self,
                  obs_n_channels,
                  n_actions,
                  lr=2.5e-4,
-                 update_interval=128*8,
-                 batchsize=32*8,
+                 update_interval=16*8, #128*8
+                 batchsize=32*8, #32*8
                  epochs=4,
                  device_id=0):
 
@@ -29,24 +72,26 @@ class PPOAgent(object):
                 nn.init.zeros_(layer.bias_hh_l0)
             return layer
 
-        self.model = nn.Sequential(
-            lecun_init(nn.Conv2d(obs_n_channels, 32, 8, stride=4)),
-            nn.ReLU(),
-            lecun_init(nn.Conv2d(32, 64, 4, stride=2)),
-            nn.ReLU(),
-            lecun_init(nn.Conv2d(64, 64, 3, stride=1)),
-            nn.ReLU(),
-            nn.Flatten(),
-            lecun_init(nn.Linear(3136, 512)),
-            nn.ReLU(),
-            pfrl.nn.Branched(
-                nn.Sequential(
-                    lecun_init(nn.Linear(512, n_actions), 1e-2),
-                    SoftmaxCategoricalHead(),
-                ),
-                lecun_init(nn.Linear(512, 1)),
-            ),
-        )
+        # self.model = nn.Sequential(
+        #     lecun_init(nn.Conv2d(obs_n_channels, 32, 8, stride=4)),
+        #     nn.ReLU(),
+        #     lecun_init(nn.Conv2d(32, 64, 4, stride=2)),
+        #     nn.ReLU(),
+        #     lecun_init(nn.Conv2d(64, 64, 3, stride=1)),
+        #     nn.ReLU(),
+        #     nn.Flatten(),
+        #     lecun_init(nn.Linear(3136, 512)),
+        #     nn.ReLU(),
+        #     pfrl.nn.Branched(
+        #         nn.Sequential(
+        #             lecun_init(nn.Linear(512, n_actions), 1e-2),
+        #             SoftmaxCategoricalHead(),
+        #         ),
+        #         lecun_init(nn.Linear(512, 1)),
+        #     ),
+        # )
+
+        self.model = PPOAgentModel(obs_n_channels, n_actions)
 
         self.device_id = device_id
         self.device = torch.device(f"cuda:{device_id}" if device_id > -1 else "cpu")
@@ -72,7 +117,19 @@ class PPOAgent(object):
         )
         self.agent._initialize_batch_variables(1)
 
+        self.feature_output = None
+        def hook(model, input, output):
+            self.feature_output = output.detach()
+        self.agent.model.fatten.register_forward_hook(hook)
+
+    def get_features(self, obs):
+        self.agent.model.eval()
+        self.agent.act(obs)
+        self.agent.model.train()
+        return np.array(self.feature_output)
+
     def act(self, obs):
+        assert np.all(np.isfinite(obs))
         return self.agent.act(obs)
 
     def step(self, obs, action, reward, next_obs, done):

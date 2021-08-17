@@ -1,6 +1,4 @@
 
-
-
 """
 
 List of parallel envs
@@ -15,13 +13,16 @@ train feeds tuples to Policy over options (optional for now)
 
 """
 
+import numpy as np
+import matplotlib.pyplot as plt
+
 from agent.OptionClass import Option
 from sklearn.svm import OneClassSVM, SVC
 
 
 class OptionHandler:
 
-    def __init__(self, drn_model, state_dim, action_dim, device, buffer_length=100, gestation_period=50, max_steps=1000):
+    def __init__(self, drn_model, state_dim, action_dim, device, buffer_length=100, gestation_period=25, max_steps=500):
 
         self.drn_model = drn_model
 
@@ -51,6 +52,7 @@ class OptionHandler:
         self.new_options.append(global_option)
         self.options.append(global_option)
 
+
     def update(self, state, action, reward, next_state, done, op):
         # if op not in self.update_buffers.keys():
         #     self.update_buffers[op] = []
@@ -72,36 +74,45 @@ class OptionHandler:
 
     def create_new_option(self, name, is_global=False):
         if is_global:
-            option = Option(state_dim=self.state_dim, action_dim=self.action_dim, buffer_length=self.buffer_length,
+            option = Option(termination_set=None, state_dim=self.state_dim, action_dim=self.action_dim, buffer_length=self.buffer_length,
                                       global_init=True,
                                       gestation_period=self.gestation_period,
                                       timeout=200, max_steps=self.max_steps, device=self.device,
-                                      target_salient_event=None,
                                       name="global-option",
                                       option_idx=len(self.options),
-                                      lr_c=self.lr_c, lr_a=self.lr_a)
+                                      lr_c=self.lr_c, lr_a=self.lr_a, global_option=None)
         else:
             traj = self.drn_model.last_trajectory
 
-            _, _, _, _, I = self.drn_model.get_latest_subgoals()
+            _, _, _, freq_vals, I = self.drn_model.get_latest_subgoals()
 
             if len(I) == 0:
                 #option creation failed, no salient event
                 return None
 
-            option = Option(state_dim=self.state_dim, action_dim=self.action_dim, buffer_length=self.buffer_length,
+            event_I = I[np.argmax(freq_vals)]
+            window = 5
+            states = traj[event_I-window : event_I + window]
+
+            option = Option(termination_set=states, state_dim=self.state_dim, action_dim=self.action_dim,
+                                      buffer_length=self.buffer_length,
                                       global_init=True,
                                       gestation_period=self.gestation_period,
                                       timeout=200, max_steps=self.max_steps, device=self.device,
-                                      target_salient_event=None,
                                       name=name,
                                       option_idx=len(self.options),
-                                      lr_c=self.lr_c, lr_a=self.lr_a)
+                                      lr_c=self.lr_c, lr_a=self.lr_a, global_option=self.global_option)
 
-            event_I = I[0]
-            window = 5
-            target_salient_event = option.create_termination_classifier(traj[event_I-window : event_I + window])
-            option.target_salient_event = target_salient_event
+
+
+
+            S = np.mean(states, axis=(0,1))
+            plt.title("termination set")
+            plt.imshow(S)
+            plt.savefig("option_plots/term_" + name)
+
+            # target_salient_event = option.create_termination_classifier(states)
+            # option.set_target_salient_event(target_salient_event)
 
             option.derive_positive_and_negative_examples(traj)
             option.fit_initiation_classifier()
@@ -125,7 +136,7 @@ class OptionHandler:
 
     def manage_option_after_execution(self, executed_option):
         #If option finished gestation add it to mature option list
-        if executed_option in self.new_options and executed_option.get_training_phase() != "gestation":
+        if executed_option in self.new_options and not executed_option.is_in_training_phase():
             self.new_options.remove(executed_option)
             self.mature_options.append(executed_option)
 
@@ -135,3 +146,6 @@ class OptionHandler:
         #clear option buffer every 2 * executed_option.gestation_period goal hits.
         if executed_option.num_goal_hits >= 2 * executed_option.gestation_period and self.clear_option_buffers:
             self.clear_replay_buffer(executed_option)
+
+        if not executed_option.is_global_option:
+            executed_option.update_termination_classifier()

@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from tensorboardX import SummaryWriter
 from torch.multiprocessing import Pipe
+from collections import deque
 
 from agents import *
 from config import *
@@ -15,6 +16,7 @@ from envs import *
 from utils import *
 
 from guppy import hpy
+import gc
 
 import sys
 import resource
@@ -32,6 +34,34 @@ def get_memory():
                 free_memory += int(sline[1])
     return free_memory
 
+def get_size(obj, seen=None):
+    """Recursively finds size of objects"""
+    size = sys.getsizeof(obj)
+    if seen is None:
+        seen = set()
+    obj_id = id(obj)
+    if obj_id in seen:
+        return 0
+    seen.add(obj_id)
+    if isinstance(obj, dict):
+        size += sum([get_size(v, seen) for v in obj.values()])
+        size += sum([get_size(k, seen) for k in obj.keys()])
+    elif hasattr(obj, '__dict__'):
+        size += get_size(obj.__dict__, seen)
+    elif hasattr(obj, '__iter__') and not isinstance(obj, (str, bytes, bytearray)):
+        size += sum([get_size(i, seen) for i in obj])
+    return size
+
+
+def dump_garbage():
+    gc.collect()
+
+    print("\nGARBAGE OBJECTS:")
+    for x in gc.garbage:
+        s = str(x)
+        if len(s) > 80:
+            s = s[:80]
+        print(type(x),"\n  ", s)
 
 def main():
 
@@ -121,10 +151,12 @@ def main():
     #     use_noisy_net=use_noisy_net
     # )
     input_size = (4, 84, 84)
-    drn_model = DeepRelNov(None, input_size, output_size, use_cuda=use_cuda)
+
+    agent = DRNAgent(input_size, output_size)
+    drn_model = DeepRelNov(agent.rnd, True, input_size, output_size, use_cuda=use_cuda)
     option_handler = OptionHandler(drn_model, len(input_size), output_size, torch.device)
 
-    agent = DRNAgent(option_handler, drn_model)
+
 
     if is_load_model:
         print('load model...')
@@ -143,7 +175,7 @@ def main():
     child_conns = []
     for idx in range(num_worker):
         parent_conn, child_conn = Pipe()
-        work = env_type(drn_model, obs_rms, env_id, is_render, idx, child_conn, sticky_action=sticky_action, p=action_prob,
+        work = env_type(env_id, is_render, idx, child_conn, sticky_action=sticky_action, p=action_prob,
                         life_done=life_done)
         work.start()
         works.append(work)
@@ -155,6 +187,8 @@ def main():
     current_option = [None for i in range(num_worker)]
     option_trajectories = [[] for i in range(num_worker)]
     option_duration = [0 for i in range(num_worker)]
+
+    trajectories = [[] for i in range(num_worker)]
 
     sample_episode = 0
     sample_rall = 0
@@ -173,13 +207,15 @@ def main():
         for parent_conn, action in zip(parent_conns, actions):
             parent_conn.send(action)
 
-        for parent_conn in parent_conns:
-            s, r, d, rd, lr, _, traj = parent_conn.recv()
+        for i,parent_conn in enumerate(parent_conns):
+            s, r, d, rd, lr, _ = parent_conn.recv()
             # next_obs.append(s[-1, :, :].reshape([1, 84, 84]))
-            if traj is not None:
-                traj = ((np.stack(traj) - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5)
-                drn_model.add_to_train_buffer(traj)
+            if rd:
+                traj = ((np.stack(trajectories[i]) - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5)
+                drn_model.train_rel_nov(traj)
+                trajectories[i].clear()
             next_obs.append(s)
+            trajectories[i].append(s)
 
         if len(next_obs) % (num_step * num_worker) == 0:
             next_obs = np.stack(next_obs)
@@ -187,23 +223,33 @@ def main():
             next_obs = []
     print('End to initalize...')
 
-    accumulated_worker_episode_reward = np.zeros((num_worker,))
 
-    episode_rewards = [[] for _ in range(num_worker)]
-    step_rewards = [[] for _ in range(num_worker)]
+    # episode_rewards = [[] for _ in range(num_worker)]
+    # step_rewards = [[] for _ in range(num_worker)]
     global_ep = 0
 
+
     while True:
+
+        # print("[+]", get_size(agent))
+        # print("[+]", get_size(drn_model)/1000000, "MB")
+
+        gc.collect()
+
         total_state, total_reward, total_done, total_action, total_int_reward, total_next_obs, total_ext_values, total_int_values, total_policy, total_policy_np = \
             [], [], [], [], [], [], [], [], [], []
+
+
         global_step += (num_worker * num_step)
         global_update += 1
 
-        if len(option_handler.options) > 2:
-            print(option_handler.options)
-            exit()
+        # if len(option_handler.options) > 4:
+        #     print(option_handler.options)
+        #     exit()
+        # if global_update > 100000:
+        #     print(option_handler.options)
+        #     exit()
 
-        print(hpy().heap())
 
         # Step 1. n-step rollout
         for cur_step in range(num_step):
@@ -211,7 +257,8 @@ def main():
             for i, parent_conn in enumerate(parent_conns):
 
                 if current_option[i] is None:
-                    current_option[i] = agent.act(states[i])
+                    current_option[i] = agent.act(states[i], option_handler)
+                    assert np.all(np.isfinite(states[i]))
                     action = current_option[i].act(states[i])
                 else:
                     action = current_option[i].act(states[i])
@@ -220,15 +267,17 @@ def main():
 
             next_states, rewards, dones, real_dones, log_rewards, next_obs = [], [], [], [], [], []
             for i, parent_conn in enumerate(parent_conns):
-                s, r, d, rd, lr, info, traj = parent_conn.recv()
-                # obs = np.float32(s[-1, :, :].reshape([1, 84, 84])) / 255.
-                if traj is not None:
-                    traj = ((np.stack(traj) - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5)
-                    drn_model.add_to_train_buffer(traj)
-                option_terminated = current_option[i].is_term_true(s)
+                s, r, d, rd, lr, info = parent_conn.recv()
+                # obs = np.float32(s[-1, :, :].reshape([1, 1, 84, 84])) / 255.
+
+                rd = d or rd
+
+                s_norm = ((np.array([trajectories[i][-1]]) - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5)
+                option_terminated = current_option[i].is_term_true(s_norm)
 
                 # print("updating option", current_option[i])
-                option_handler.update(states[i], actions[i], r, s, option_terminated, current_option[i])
+                int_reward = agent.compute_intrinsic_reward([s])
+                option_handler.update(states[i], actions[i], r + int_reward[0], s, option_terminated, current_option[i])
                 do_option_update = False
 
                 if option_terminated:
@@ -238,47 +287,47 @@ def main():
 
                 if rd or option_terminated or option_duration[i] >= 1000:
                     if len(option_trajectories[i]) > 0 and not current_option[i].is_global_option:
-                        print("option update", "option:", current_option[i], "traj len:", len(option_trajectories[i]))
-                        traj = ((np.stack(option_trajectories[i]) - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5)
-                        current_option[i].derive_positive_and_negative_examples(traj)
+                        print("option update", current_option[i], "traj len:", len(option_trajectories[i]), option_terminated, "|", rd, option_duration[i] >= 1000)
+                        traj = [trajectories[i][j] for j in option_trajectories[i]]
+                        traj = ((np.stack(traj) - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5)
+                        current_option[i].derive_positive_and_negative_examples(traj, option_terminated)
                         current_option[i].fit_initiation_classifier()
-
-                    option_trajectories[i] = []
+                    option_trajectories[i].clear()
                     option_duration[i] = 0
                     current_option[i] = None
-
                 else:
                     option_duration[i] += 1
 
-                option_trajectories[i].append(s)
+                if rd:
 
+                    traj = ((np.stack(trajectories[i]) - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5)
+                    drn_model.train_rel_nov(traj)
+                    trajectories[i].clear()
+
+                trajectories[i].append(s)
+                option_trajectories[i].append(len(trajectories[i])-1)
 
                 next_states.append(s)
-                rewards.append(r)
-                dones.append(d)
+                # rewards.append(r)
+                # dones.append(d)
                 real_dones.append(rd)
                 log_rewards.append(lr)
                 next_obs.append(s)
 
+
             next_states = np.stack(next_states)
-            rewards = np.hstack(rewards)
-            dones = np.hstack(dones)
-            real_dones = np.hstack(real_dones)
+
+            # rewards = np.hstack(rewards)
+            #dones = np.hstack(dones)
+            # real_dones = np.hstack(real_dones)
             next_obs = np.stack(next_obs)
 
-            accumulated_worker_episode_reward += rewards
-            for i in range(len(rewards)):
-                step_rewards[i].append(rewards[i])
-                if real_dones[i]:
-                    episode_rewards[i].append(accumulated_worker_episode_reward[i])
-                    accumulated_worker_episode_reward[i] = 0
 
             # total reward = int reward + ext Reward
             # intrinsic_reward = agent.compute_intrinsic_reward(
             #     ((next_obs - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5))
             # intrinsic_reward = np.hstack(intrinsic_reward)
-            intrinsic_reward = np.zeros(num_worker)
-            sample_i_rall += 0 #intrinsic_reward[sample_env_idx]
+            # sample_i_rall += intrinsic_reward[sample_env_idx]
 
             total_next_obs.append(next_obs)
             # total_int_reward.append(intrinsic_reward)
@@ -290,28 +339,28 @@ def main():
             # total_int_values.append(value_int)
             # total_policy.append(policy)
             # total_policy_np.append(policy.cpu().numpy())
+            states = next_states
+            del next_states
 
-            states = next_states[:, :, :, :]
-            prev_obs = next_obs[:, :, :, :]
+            # sample_rall += log_rewards[sample_env_idx]
+            #
+            # sample_step += 1
+            # if real_dones[sample_env_idx]:
+            #     sample_episode += 1
+            #     writer.add_scalar('data/reward_per_epi', sample_rall, sample_episode)
+            #     writer.add_scalar('data/reward_per_rollout', sample_rall, global_update)
+            #     writer.add_scalar('data/step', sample_step, sample_episode)
+            #     sample_rall = 0
+            #     sample_step = 0
+            #     sample_i_rall = 0
 
-            sample_rall += log_rewards[sample_env_idx]
-
-            sample_step += 1
-            if real_dones[sample_env_idx]:
-                sample_episode += 1
-                # writer.add_scalar('data/reward_per_epi', sample_rall, sample_episode)
-                # writer.add_scalar('data/reward_per_rollout', sample_rall, global_update)
-                # writer.add_scalar('data/step', sample_step, sample_episode)
-                sample_rall = 0
-                sample_step = 0
-                sample_i_rall = 0
 
             # writer.add_scalar('data/avg_reward_per_step', np.mean(rewards), global_step + num_worker * (cur_step - num_step))
 
-        while all(episode_rewards):
-            global_ep += 1
-            avg_ep_reward = np.mean([env_ep_rewards.pop(0) for env_ep_rewards in episode_rewards])
-            writer.add_scalar('data/avg_reward_per_episode', avg_ep_reward, global_ep)
+        # while all(episode_rewards):
+        #     global_ep += 1
+        #     avg_ep_reward = np.mean([env_ep_rewards.pop(0) for env_ep_rewards in episode_rewards])
+        #     writer.add_scalar('data/avg_reward_per_episode', avg_ep_reward, global_ep)
 
         # _, value_ext, value_int, _ = agent.get_action(np.float32(states) / 255.)
         # total_ext_values.append(value_ext)
@@ -370,7 +419,6 @@ def main():
         # # Step 4. update obs normalize param
         obs_rms.update(total_next_obs)
         option_handler.create_new_option_if_possible()
-        drn_model.train_from_buffer()
 
         # -----------------------------------------------
 
@@ -383,7 +431,24 @@ def main():
         #     print('Now Global Step :{}'.format(global_step))
         #     torch.save(agent.model.state_dict(), model_path)
         #     torch.save(agent.rnd.predictor.state_dict(), predictor_path)
-        #     torch.save(agent.rnd.target.state_dict(), target_path)
+        #     torch.save(agent.rnd.target.state_dict(), target_path)\
+
+        del rewards
+        del dones
+        del real_dones
+        del log_rewards
+        del next_obs
+
+        del total_state
+        del total_reward
+        del total_done
+        del total_action
+        del total_int_reward
+        del total_next_obs
+        del total_ext_values
+        del total_int_values
+        del total_policy
+        del total_policy_np
 
 
 if __name__ == '__main__':

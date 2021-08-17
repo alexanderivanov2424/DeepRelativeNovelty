@@ -10,10 +10,12 @@ from agent.dynamics.mpc import MPC
 
 from agent.ppo.PPOAgentClass import PPOAgent
 
+from collections import deque
+
 
 class Option(object):
-    def __init__(self, *, name, state_dim, action_dim, buffer_length, global_init, gestation_period,
-                 timeout, max_steps, device, option_idx, lr_c, lr_a, target_salient_event=None,
+    def __init__(self, *, name, termination_set, state_dim, action_dim, buffer_length, global_init, gestation_period,
+                 timeout, max_steps, device, option_idx, lr_c, lr_a, global_option,
                  path_to_model=None):
         self.name = name
         self.lr_c = lr_c
@@ -23,11 +25,13 @@ class Option(object):
         # self.global_solver = global_solver
         # self.use_global_vf = use_global_vf
         self.timeout = timeout
+        self.steps = 0
         self.max_steps = max_steps
         self.global_init = global_init #is global option
         self.buffer_length = buffer_length
-        self.target_salient_event = target_salient_event #termination set
-        self.is_global_option = target_salient_event is None
+
+        self.global_option = global_option
+        self.is_global_option = global_option is None
 
         self.seed = 0
         self.option_idx = option_idx
@@ -36,14 +40,17 @@ class Option(object):
         self.num_executions = 0
         self.gestation_period = gestation_period
 
-        self.positive_examples = []
-        self.negative_examples = []
+        self.positive_examples = deque(maxlen=100)
+        self.negative_examples = deque(maxlen=1)
         self.optimistic_classifier = None
         self.pessimistic_classifier = None
 
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.solver = PPOAgent(obs_n_channels=self.state_dim + 1, n_actions=self.action_dim, device_id=-1)
+
+        self.termination_set = termination_set
+        self.update_termination_classifier()
 
         self.children = []
         self.success_curve = []
@@ -58,7 +65,6 @@ class Option(object):
 
         print(f"Created model-based option {self.name} with option_idx={self.option_idx}")
 
-
     # ------------------------------------------------------------
     # Learning Phase Methods
     # ------------------------------------------------------------
@@ -67,6 +73,9 @@ class Option(object):
         if self.num_goal_hits < self.gestation_period:
             return "gestation"
         return "initiation_done"
+
+    def is_in_training_phase(self):
+        return self.num_goal_hits < self.gestation_period
 
     def extract_state_features(self, state):
         # features = state if isinstance(state, np.ndarray) else state.features()
@@ -90,9 +99,14 @@ class Option(object):
 
     def is_term_true(self, state):
         if self.is_global_option:
+            self.steps = 0
             return True
-
-        return self.target_salient_event(state)
+        if self.steps > self.max_steps:
+            self.steps = 0
+            return True
+        state = np.reshape(state, (4,84,84))
+        features = np.reshape(self.global_option.solver.get_features(state), (1, -1))
+        return self.termination_classifier.predict(features)[0] == 1
 
 
     def pessimistic_is_init_true(self, state):
@@ -117,6 +131,8 @@ class Option(object):
 
     def act(self, state):
         """ Epsilon-greedy action selection. """
+        self.steps += 1
+        self.num_executions += 1
 
         if random.random() < self._get_epsilon():
             return np.random.randint(0, self.action_dim)
@@ -243,22 +259,42 @@ class Option(object):
 
         return self.sample_from_initiation_region_fast()
 
-    def derive_positive_and_negative_examples(self, visited_states):
+    def derive_positive_and_negative_examples(self, visited_states, success=None):
         start_state = visited_states[0]
         final_state = visited_states[-1]
 
-        if self.is_term_true(final_state):
+        if success is None:
+            success = self.is_term_true(final_state)
+
+        if success:
             positive_states = [start_state] + visited_states[-self.buffer_length:]
-            self.positive_examples.append(positive_states)
+            self.positive_examples.extend(positive_states)
         else:
             negative_examples = [start_state]
-            self.negative_examples.append(negative_examples)
+            self.negative_examples.extend(negative_examples)
 
-    def create_termination_classifier(self, states, nu=0.1):
-        positive_feature_matrix = self.construct_feature_matrix(states)
-        termination_classifier = OneClassSVM(kernel="rbf", nu=nu)
-        termination_classifier.fit(positive_feature_matrix)
-        return lambda state : termination_classifier.predict([state])[0] == 1
+        import matplotlib.pyplot as plt
+        arr = np.array(self.positive_examples)
+        if arr.shape[0] > 0:
+            S = np.mean(arr, axis=(0,1))
+            plt.title("initation set positive examples")
+            plt.imshow(S)
+            plt.savefig("option_plots/positive_" + self.name + "_")
+
+        arr = np.array(self.negative_examples)
+        if arr.shape[0] > 0:
+            S = np.mean(arr, axis=(0,1))
+            plt.title("initation set negative examples")
+            plt.imshow(S)
+            plt.savefig("option_plots/negative_" + self.name + "_")
+
+
+    def update_termination_classifier(self, nu=0.1):
+        if not self.termination_set is None:
+            features = [self.global_option.solver.get_features(obs) for obs in self.termination_set]
+            positive_feature_matrix = self.construct_feature_matrix(features)
+            self.termination_classifier = OneClassSVM(kernel="rbf", nu=nu)
+            self.termination_classifier.fit(positive_feature_matrix)
 
     def fit_initiation_classifier(self):
         if len(self.negative_examples) > 0 and len(self.positive_examples) > 0:
@@ -267,8 +303,8 @@ class Option(object):
             self.train_one_class_svm()
 
     def construct_feature_matrix(self, examples):
-        states = list(itertools.chain.from_iterable(examples))
-        positions = [self.extract_state_features(state).flatten() for state in states]
+        # states = list(itertools.chain.from_iterable(examples))
+        positions = [np.reshape(self.extract_state_features(state), (-1,)) for state in examples]
         return np.array(positions)
 
     def train_one_class_svm(self, nu=0.1):  # TODO: Implement gamma="auto" for thundersvm

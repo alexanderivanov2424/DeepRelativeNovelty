@@ -159,16 +159,17 @@ class CnnActorCriticNetwork(nn.Module):
 
 
 class RNDModel(nn.Module):
-    def __init__(self, input_size, output_size):
+    def __init__(self, input_size, output_size, in_channels=4):
         super(RNDModel, self).__init__()
 
         self.input_size = input_size
         self.output_size = output_size
+        self.input_channels = in_channels
 
         feature_output = 7 * 7 * 64
         self.predictor = nn.Sequential(
             nn.Conv2d(
-                in_channels=4,
+                in_channels=self.input_channels,
                 out_channels=32,
                 kernel_size=8,
                 stride=4),
@@ -195,7 +196,7 @@ class RNDModel(nn.Module):
 
         self.target = nn.Sequential(
             nn.Conv2d(
-                in_channels=4,
+                in_channels=self.input_channels,
                 out_channels=32,
                 kernel_size=8,
                 stride=4),

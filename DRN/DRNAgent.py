@@ -8,15 +8,24 @@ from copy import deepcopy
 from functools import reduce
 from collections import deque
 
+from model import RNDModel
+
 
 from agent.OptionClass import Option
 
 
 class DRNAgent(object):
-    def __init__(self, option_handler, deep_rel_nov):
+    def __init__(self, rnd_input_size, rnd_output_size):
+        self.rnd = RNDModel(rnd_input_size, rnd_output_size)
 
-        self.option_handler = option_handler
-        self.deep_rel_nov = deep_rel_nov
+    def compute_intrinsic_reward(self, next_obs):
+        next_obs = torch.tensor(next_obs, dtype=torch.float)
+
+        target_next_feature = self.rnd.target(next_obs)
+        predict_next_feature = self.rnd.predictor(next_obs)
+        intrinsic_reward = (target_next_feature - predict_next_feature).pow(2).sum(1) / 2
+
+        return intrinsic_reward.data.cpu().numpy()
 
     @staticmethod
     def _pick_earliest_option(state, options):
@@ -24,17 +33,17 @@ class DRNAgent(object):
             if option.is_init_true(state) and not option.is_term_true(state):
                 return option
 
-    def act(self, state):
+    def act(self, state, option_handler):
         # current_option = self._pick_earliest_option(state, self.chain)
         # return current_option if current_option is not None else self.global_option
         available_options = []
-        for option in self.option_handler.options:
-            if option == self.option_handler.global_option:
-                continue
+        for option in option_handler.options:
+            # if option == option_handler.global_option:
+            #     continue
             if option.is_init_true(state):
                 available_options.append(option)
         if len(available_options) == 0:
-            return self.option_handler.global_option
+            return option_handler.global_option
         return np.random.choice(available_options)
 
     def get_action(self, states):
