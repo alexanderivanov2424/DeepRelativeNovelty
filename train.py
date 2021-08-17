@@ -276,7 +276,11 @@ def main():
                 option_terminated = current_option[i].is_term_true(s_norm)
 
                 # print("updating option", current_option[i])
-                int_reward = agent.compute_intrinsic_reward([s])
+                if current_option[i].is_global_option:
+                    int_reward = agent.compute_intrinsic_reward([s])
+                else:
+                    int_reward = 0
+                #TODO do we need to reward normal options for hitting termination set
                 option_handler.update(states[i], actions[i], r + int_reward[0], s, option_terminated, current_option[i])
                 do_option_update = False
 
@@ -299,7 +303,6 @@ def main():
                     option_duration[i] += 1
 
                 if rd:
-
                     traj = ((np.stack(trajectories[i]) - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5)
                     drn_model.train_rel_nov(traj)
                     trajectories[i].clear()

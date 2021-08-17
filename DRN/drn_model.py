@@ -167,7 +167,7 @@ class DeepRelNov:
         # self.last_full_state_trajectory = full_state_trajectory
         self.training_iterations += 1
         if self.train_nov_rnd:
-            self.state_buf.extend(trajectory[::5])
+            self.state_buf.extend(trajectory)
             self.nov_rnd.train(self.state_buf)
         nov_vals = self.get_nov_vals(trajectory)
         rel_nov_vals = self.get_rel_nov_vals(trajectory, nov_vals)
