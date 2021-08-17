@@ -153,7 +153,7 @@ def main():
     input_size = (4, 84, 84)
 
     agent = DRNAgent(input_size, output_size)
-    drn_model = DeepRelNov(agent.rnd, True, input_size, output_size, use_cuda=use_cuda)
+    drn_model = DeepRelNov(agent.rnd, False, input_size, output_size, use_cuda=use_cuda)
     option_handler = OptionHandler(drn_model, len(input_size), output_size, torch.device)
 
 
@@ -426,6 +426,7 @@ def main():
         # -----------------------------------------------
 
         # Step 5. Training!
+        drn_model.nov_rnd.train(((total_next_obs - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5))
         # agent.train_model(np.float32(total_state) / 255., ext_target, int_target, total_action,
         #                   total_adv, ((total_next_obs - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5),
         #                   total_policy)
