@@ -252,7 +252,7 @@ def main():
 
 
         # Step 1. n-step rollout
-        for cur_step in range(num_step):
+        for cur_step in range(num_step):            
             actions = [None for i in range(len(parent_conns))]
             for i, parent_conn in enumerate(parent_conns):
 
