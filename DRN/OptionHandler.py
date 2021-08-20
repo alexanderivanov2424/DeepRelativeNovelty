@@ -116,6 +116,7 @@ class OptionHandler:
 
             option.derive_positive_and_negative_examples(traj)
             option.fit_initiation_classifier()
+            print("finished training initiation set")
         return option
 
 

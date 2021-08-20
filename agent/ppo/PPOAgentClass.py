@@ -29,7 +29,7 @@ class PPOAgentModel(nn.Module):
         self.relu2 = nn.ReLU()
         self.conv3 = lecun_init(nn.Conv2d(64, 64, 3, stride=1))
         self.relu3 = nn.ReLU()
-        self.fatten = nn.Flatten()
+        self.flatten = nn.Flatten()
         self.nn1 = lecun_init(nn.Linear(3136, 512))
         self.relu4 = nn.ReLU()
         self.branch = pfrl.nn.Branched(
@@ -45,7 +45,7 @@ class PPOAgentModel(nn.Module):
         x = self.relu1(self.conv1(x))
         x = self.relu2(self.conv2(x))
         x = self.relu3(self.conv3(x))
-        x = self.fatten(x)
+        x = self.flatten(x)
         x = self.relu4(self.nn1(x))
         x = self.branch(x)
         return x
@@ -120,7 +120,7 @@ class PPOAgent(object):
         self.feature_output = None
         def hook(model, input, output):
             self.feature_output = output.detach()
-        self.agent.model.fatten.register_forward_hook(hook)
+        self.agent.model.flatten.register_forward_hook(hook)
 
     def get_features(self, obs):
         self.agent.model.eval()
