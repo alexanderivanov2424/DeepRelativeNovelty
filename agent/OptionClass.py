@@ -40,8 +40,8 @@ class Option(object):
         self.num_executions = 0
         self.gestation_period = gestation_period
 
-        self.positive_examples = deque(maxlen=100)
-        self.negative_examples = deque(maxlen=1)
+        self.positive_examples = deque(maxlen=100) #100 * 3136 = 313600
+        self.negative_examples = deque(maxlen=100)
         self.optimistic_classifier = None
         self.pessimistic_classifier = None
 
@@ -298,8 +298,10 @@ class Option(object):
 
     def fit_initiation_classifier(self):
         if len(self.negative_examples) > 0 and len(self.positive_examples) > 0:
+            print("train_two_class_classifier")
             self.train_two_class_classifier()
         elif len(self.positive_examples) > 0:
+            print("train_one_class_svm")
             self.train_one_class_svm()
 
     def construct_feature_matrix(self, examples):
@@ -308,16 +310,26 @@ class Option(object):
         return np.array(positions)
 
     def train_one_class_svm(self, nu=0.1):  # TODO: Implement gamma="auto" for thundersvm
+        print("train_one_class_svm matrix")
         positive_feature_matrix = self.construct_feature_matrix(self.positive_examples)
+        print("train_one_class_svm SVM")
         self.pessimistic_classifier = OneClassSVM(kernel="rbf", nu=nu)
+        print("train_one_class_svm fit")
         self.pessimistic_classifier.fit(positive_feature_matrix)
 
+
+        print("train_one_class_svm SVM 2")
         self.optimistic_classifier = OneClassSVM(kernel="rbf", nu=nu/10.)
+        print("train_one_class_svm fit 2")
         self.optimistic_classifier.fit(positive_feature_matrix)
 
     def train_two_class_classifier(self, nu=0.1):
+        print("train_two_class_classifier matrix 1")
         positive_feature_matrix = self.construct_feature_matrix(self.positive_examples)
+        print("train_two_class_classifier matrix 2")
         negative_feature_matrix = self.construct_feature_matrix(self.negative_examples)
+
+        print("train_two_class_classifier numpy")
         positive_labels = [1] * positive_feature_matrix.shape[0]
         negative_labels = [0] * negative_feature_matrix.shape[0]
 
@@ -329,7 +341,9 @@ class Option(object):
         else:
             kwargs = {"kernel": "rbf", "gamma": "auto"}
 
+        print("train_two_class_classifier SVC")
         self.optimistic_classifier = SVC(**kwargs)
+        print("train_two_class_classifier fit")
         self.optimistic_classifier.fit(X, Y)
 
         training_predictions = self.optimistic_classifier.predict(X)
