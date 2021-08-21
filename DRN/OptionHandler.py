@@ -109,7 +109,7 @@ class OptionHandler:
             S = np.mean(states, axis=(0,1))
             plt.title("termination set")
             plt.imshow(S)
-            plt.savefig("option_plots/term_" + name)
+            plt.savefig("option_plots_test/term_" + name)
 
             # target_salient_event = option.create_termination_classifier(states)
             # option.set_target_salient_event(target_salient_event)

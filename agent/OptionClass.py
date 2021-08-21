@@ -279,14 +279,14 @@ class Option(object):
             S = np.mean(arr, axis=(0,1))
             plt.title("initation set positive examples")
             plt.imshow(S)
-            plt.savefig("option_plots/positive_" + self.name + "_")
+            plt.savefig("option_plots_test/positive_" + self.name + "_")
 
         arr = np.array(self.negative_examples)
         if arr.shape[0] > 0:
             S = np.mean(arr, axis=(0,1))
             plt.title("initation set negative examples")
             plt.imshow(S)
-            plt.savefig("option_plots/negative_" + self.name + "_")
+            plt.savefig("option_plots_test/negative_" + self.name + "_")
 
 
     def update_termination_classifier(self, nu=0.1):
