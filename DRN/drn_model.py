@@ -295,8 +295,9 @@ class DeepRelNov:
             fig, axs = plt.subplots(len(states))
             for i,state in enumerate(states):
                 axs[i].imshow(np.mean(state,axis=0))
+                axs[i].set_axis_off()
                 axs[i].set_title(I_freq[i])
-            fig.savefig("nov-states" + str(I[np.argmax(freq_vals[I_freq])]))
+            fig.savefig("nov-states" + str(I[np.argmax(freq_vals[I_freq])]), dpi=1000)
 
             # for state in trajectory:
             #     plt.imshow(np.sum(state, axis=0))
