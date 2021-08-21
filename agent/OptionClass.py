@@ -40,8 +40,8 @@ class Option(object):
         self.num_executions = 0
         self.gestation_period = gestation_period
 
-        self.positive_examples = deque(maxlen=100) #100 * 3136 = 313600
-        self.negative_examples = deque(maxlen=100)
+        self.positive_examples = deque(maxlen=500) #100 * 3136 = 313600
+        self.negative_examples = deque(maxlen=1)
         self.optimistic_classifier = None
         self.pessimistic_classifier = None
 

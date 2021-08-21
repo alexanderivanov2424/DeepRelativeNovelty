@@ -119,6 +119,8 @@ def main():
     ext_coef = float(default_config['ExtCoef'])
     int_coef = float(default_config['IntCoef'])
 
+    OPTION_SUCESS_REWARD = 10
+
     sticky_action = default_config.getboolean('StickyAction')
     action_prob = float(default_config['ActionProb'])
     life_done = default_config.getboolean('LifeDone')
@@ -265,6 +267,7 @@ def main():
                 actions[i] = action
                 parent_conn.send(action)
 
+
             next_states, rewards, dones, real_dones, log_rewards, next_obs = [], [], [], [], [], []
             for i, parent_conn in enumerate(parent_conns):
                 s, r, d, rd, lr, info = parent_conn.recv()
@@ -275,11 +278,13 @@ def main():
                 s_norm = ((np.array([trajectories[i][-1]]) - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5)
                 option_terminated = current_option[i].is_term_true(s_norm)
 
+
                 # print("updating option", current_option[i])
                 if current_option[i].is_global_option:
                     int_reward = agent.compute_intrinsic_reward([s])[0]
                 else:
-                    int_reward = 0
+                    int_reward = OPTION_SUCESS_REWARD if option_terminated else 0
+
                 #TODO do we need to reward normal options for hitting termination set
                 option_handler.update(states[i], actions[i], r + int_reward, s, option_terminated, current_option[i])
                 do_option_update = False
@@ -374,7 +379,7 @@ def main():
         # total_reward = np.stack(total_reward).transpose().clip(-1, 1)
         # total_action = np.stack(total_action).transpose().reshape([-1])
         # total_done = np.stack(total_done).transpose()
-        total_next_obs = np.stack(total_next_obs).transpose([1, 0, 2, 3, 4]).reshape([-1, 1, 84, 84])
+        total_next_obs = np.stack(total_next_obs).transpose([1, 0, 2, 3, 4]).reshape([-1, 4, 84, 84])
         # total_ext_values = np.stack(total_ext_values).transpose()
         # total_int_values = np.stack(total_int_values).transpose()
         # total_logging_policy = np.vstack(total_policy_np)
@@ -426,7 +431,16 @@ def main():
         # -----------------------------------------------
 
         # Step 5. Training!
-        drn_model.nov_rnd.train(((total_next_obs - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5))
+        print("X")
+        total_next_obs -= obs_rms.mean
+        total_next_obs /= np.sqrt(obs_rms.var)
+        print("Y")
+        total_next_obs = total_next_obs.clip(-5, 5)
+        print("Z")
+        drn_model.nov_rnd.train(total_next_obs)
+        print("ZZ")
+        # drn_model.nov_rnd.train(((total_next_obs - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5))
+
         # agent.train_model(np.float32(total_state) / 255., ext_target, int_target, total_action,
         #                   total_adv, ((total_next_obs - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5),
         #                   total_policy)

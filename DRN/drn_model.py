@@ -184,8 +184,8 @@ class DeepRelNov:
             self.update_freq_thresh(freq_vals)
 
 
-        # if self.training_iterations > 500 and self.training_iterations % 50 == 0:
-        #     self.get_rel_nov_subgoals(trajectory, plot=True)
+        if self.training_iterations > 500 and self.training_iterations % 50 == 0:
+            self.get_rel_nov_subgoals(trajectory, plot=True)
 
 
     def train_max(self, trajectory):
@@ -283,16 +283,16 @@ class DeepRelNov:
 
         I = I[I_freq]
 
-        # if plot:
-        #     import matplotlib.pyplot as plt
-        #     plt.plot(nov_vals)
-        #     plt.plot(rel_nov_vals)
-        #     plt.title(I[np.argmax(freq_vals[I_freq])])
-        #     plt.show()
-        #     for state in trajectory:
-        #         plt.imshow(np.sum(state, axis=0))
-        #         plt.draw()
-        #         plt.pause(.01)
-        #         plt.clf()
+        if plot:
+            import matplotlib.pyplot as plt
+            plt.plot(nov_vals)
+            plt.plot(rel_nov_vals)
+            plt.title(I[np.argmax(freq_vals[I_freq])])
+            plt.show()
+            for state in trajectory:
+                plt.imshow(np.sum(state, axis=0))
+                plt.draw()
+                plt.pause(.01)
+                plt.clf()
 
         return rel_nov_states[I_freq], nov_vals[I], rel_nov_vals[I], freq_vals[I_freq], I
