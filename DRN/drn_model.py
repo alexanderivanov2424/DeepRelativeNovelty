@@ -184,7 +184,7 @@ class DeepRelNov:
             self.update_freq_thresh(freq_vals)
 
 
-        if self.training_iterations > 1000 and self.training_iterations % 50 == 0:
+        if self.training_iterations > 10 and self.training_iterations % 50 == 0:
             self.get_rel_nov_subgoals(trajectory, plot=True)
 
 
@@ -291,9 +291,9 @@ class DeepRelNov:
             plt.savefig("nov-vals" + str(I[np.argmax(freq_vals[I_freq])]))
 
             states = rel_nov_states[I_freq]
-            fig, axs = plt.subplots(len(state))
+            fig, axs = plt.subplots(len(states))
             for i,state in enumerate(states):
-                axs[i].imshow(state)
+                axs[i].imshow(np.mean(state,axis=1))
                 axs[i].set_title(I_freq[i])
             plt.savefig("nov-states" + str(I[np.argmax(freq_vals[I_freq])]))
 
