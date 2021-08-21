@@ -285,17 +285,18 @@ class DeepRelNov:
 
         if plot:
             import matplotlib.pyplot as plt
-            plt.plot(nov_vals)
-            plt.plot(rel_nov_vals)
-            plt.title(I[np.argmax(freq_vals[I_freq])])
-            plt.savefig("nov-vals" + str(I[np.argmax(freq_vals[I_freq])]))
+            fig, axs = plt.subplots(1)
+            axs.plot(nov_vals)
+            axs.plot(rel_nov_vals)
+            axs.set_title(I[np.argmax(freq_vals[I_freq])])
+            fig.savefig("nov-vals" + str(I[np.argmax(freq_vals[I_freq])]))
 
             states = rel_nov_states[I_freq]
             fig, axs = plt.subplots(len(states))
             for i,state in enumerate(states):
-                axs[i].imshow(np.mean(state,axis=1))
+                axs[i].imshow(np.mean(state,axis=0))
                 axs[i].set_title(I_freq[i])
-            plt.savefig("nov-states" + str(I[np.argmax(freq_vals[I_freq])]))
+            fig.savefig("nov-states" + str(I[np.argmax(freq_vals[I_freq])]))
 
             # for state in trajectory:
             #     plt.imshow(np.sum(state, axis=0))
