@@ -115,9 +115,7 @@ class OptionHandler:
             # option.set_target_salient_event(target_salient_event)
 
             option.derive_positive_and_negative_examples(traj)
-            print("fit_initiation_classifier")
             option.fit_initiation_classifier()
-            print("finished training initiation set")
         return option
 
 

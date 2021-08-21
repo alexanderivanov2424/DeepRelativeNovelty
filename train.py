@@ -431,14 +431,10 @@ def main():
         # -----------------------------------------------
 
         # Step 5. Training!
-        print("X")
         total_next_obs -= obs_rms.mean
         total_next_obs /= np.sqrt(obs_rms.var)
-        print("Y")
         total_next_obs = total_next_obs.clip(-5, 5)
-        print("Z")
         drn_model.nov_rnd.train(total_next_obs)
-        print("ZZ")
         # drn_model.nov_rnd.train(((total_next_obs - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5))
 
         # agent.train_model(np.float32(total_state) / 255., ext_target, int_target, total_action,
