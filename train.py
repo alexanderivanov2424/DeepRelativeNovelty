@@ -282,11 +282,11 @@ def main():
                 # print("updating option", current_option[i])
                 if current_option[i].is_global_option:
                     int_reward = agent.compute_intrinsic_reward([s])[0]
+                    option_handler.update(states[i], actions[i], r + int_reward, s, option_terminated, current_option[i])
                 else:
                     int_reward = OPTION_SUCESS_REWARD if option_terminated else 0
-
-                #TODO do we need to reward normal options for hitting termination set
-                option_handler.update(states[i], actions[i], r + int_reward, s, option_terminated, current_option[i])
+                    option_handler.update(states[i], actions[i], int_reward, s, option_terminated, current_option[i])
+                    
                 do_option_update = False
 
                 if option_terminated:
