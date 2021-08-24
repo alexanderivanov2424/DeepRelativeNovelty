@@ -184,7 +184,7 @@ class DeepRelNov:
             self.update_freq_thresh(freq_vals)
 
 
-        if self.training_iterations > 100 and self.training_iterations % 50 == 0:
+        if self.training_iterations > 1000 and self.training_iterations % 50 == 0:
             self.get_rel_nov_subgoals(trajectory, plot=True)
 
 
