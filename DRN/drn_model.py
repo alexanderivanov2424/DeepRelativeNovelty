@@ -298,6 +298,8 @@ class DeepRelNov:
                 axs[i].set_axis_off()
                 # axs[i].set_title(self.training_iterations)
             fig.savefig("nov-states" + str(self.training_iterations), dpi=1000)
+            
+            plt.clf()
 
             # for state in trajectory:
             #     plt.imshow(np.sum(state, axis=0))
