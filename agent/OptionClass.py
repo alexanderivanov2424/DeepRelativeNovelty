@@ -97,6 +97,11 @@ class Option(object):
         features = self.extract_state_features(state)
         return self.optimistic_classifier.predict([features])[0] == 1 or self.pessimistic_is_init_true(state)
 
+    def is_in_term_set(self, state):
+        state = np.reshape(state, (4,84,84))
+        features = np.reshape(self.global_option.solver.get_features(state), (1, -1))
+        return self.termination_classifier.predict(features)[0] == 1
+
     def is_term_true(self, state):
         if self.is_global_option:
             self.steps = 0
@@ -104,10 +109,7 @@ class Option(object):
         if self.steps > self.max_steps:
             self.steps = 0
             return True
-        state = np.reshape(state, (4,84,84))
-        features = np.reshape(self.global_option.solver.get_features(state), (1, -1))
-        return self.termination_classifier.predict(features)[0] == 1
-
+        return self.is_in_term_set(state)
 
     def pessimistic_is_init_true(self, state):
         if self.is_global_option:
@@ -298,10 +300,8 @@ class Option(object):
 
     def fit_initiation_classifier(self):
         if len(self.negative_examples) > 0 and len(self.positive_examples) > 0:
-            print("train_two_class_classifier")
             self.train_two_class_classifier()
         elif len(self.positive_examples) > 0:
-            print("train_one_class_svm")
             self.train_one_class_svm()
 
     def construct_feature_matrix(self, examples):
@@ -310,26 +310,17 @@ class Option(object):
         return np.array(positions)
 
     def train_one_class_svm(self, nu=0.1):  # TODO: Implement gamma="auto" for thundersvm
-        print("train_one_class_svm matrix")
         positive_feature_matrix = self.construct_feature_matrix(self.positive_examples)
-        print("train_one_class_svm SVM")
         self.pessimistic_classifier = OneClassSVM(kernel="rbf", nu=nu)
-        print("train_one_class_svm fit")
         self.pessimistic_classifier.fit(positive_feature_matrix)
 
-
-        print("train_one_class_svm SVM 2")
         self.optimistic_classifier = OneClassSVM(kernel="rbf", nu=nu/10.)
-        print("train_one_class_svm fit 2")
         self.optimistic_classifier.fit(positive_feature_matrix)
 
     def train_two_class_classifier(self, nu=0.1):
-        print("train_two_class_classifier matrix 1")
         positive_feature_matrix = self.construct_feature_matrix(self.positive_examples)
-        print("train_two_class_classifier matrix 2")
         negative_feature_matrix = self.construct_feature_matrix(self.negative_examples)
 
-        print("train_two_class_classifier numpy")
         positive_labels = [1] * positive_feature_matrix.shape[0]
         negative_labels = [0] * negative_feature_matrix.shape[0]
 
@@ -341,9 +332,7 @@ class Option(object):
         else:
             kwargs = {"kernel": "rbf", "gamma": "auto"}
 
-        print("train_two_class_classifier SVC")
         self.optimistic_classifier = SVC(**kwargs)
-        print("train_two_class_classifier fit")
         self.optimistic_classifier.fit(X, Y)
 
         training_predictions = self.optimistic_classifier.predict(X)

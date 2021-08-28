@@ -275,26 +275,31 @@ class DeepRelNov:
             return [], [], [], [], []
 
         freq_vals = self.freq_rnd.forward(rel_nov_states)
-        #I is relative to list of relatively novel states not global traj
+        #I_freq is relative to list of relatively novel states not global traj
         I_freq = np.arange(len(freq_vals))[freq_vals < self.freq_thresh]
-        if len(I) == 0:
+        if len(I_freq) == 0:
             return [], [], [], [], []
 
-
+        # I now contains the indices of subgoals in the whole traj
         I = I[I_freq]
+        subgoals_rel_nov_vals = rel_nov_vals[I]
 
         if plot:
             import matplotlib.pyplot as plt
             fig, axs = plt.subplots(1)
             axs.plot(nov_vals)
             axs.plot(rel_nov_vals)
+            axs.axhline(self.rel_nov_thresh, color='r')
             axs.set_title(self.training_iterations)
             fig.savefig("nov-vals" + str(self.training_iterations))
 
             states = rel_nov_states[I_freq]
             fig, axs = plt.subplots(len(states))
+            if len(states) == 1:
+                axs = [axs]
             for i,state in enumerate(states):
                 axs[i].imshow(np.mean(state,axis=0))
+                axs[i].set_title("rel nov val: " + str(subgoals_rel_nov_vals[i]), fontsize=3)
                 axs[i].set_axis_off()
                 # axs[i].set_title(self.training_iterations)
             fig.savefig("nov-states" + str(self.training_iterations), dpi=1000)
@@ -307,4 +312,5 @@ class DeepRelNov:
             #     plt.pause(.01)
             #     plt.clf()
 
+        # return subgoals, nov vals of subgoals, rel nov vals of subgoals, freq vals of subgoals and indices of subgoals
         return rel_nov_states[I_freq], nov_vals[I], rel_nov_vals[I], freq_vals[I_freq], I

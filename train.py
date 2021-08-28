@@ -1,3 +1,4 @@
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -17,6 +18,7 @@ from utils import *
 
 from guppy import hpy
 import gc
+import yappi
 
 import sys
 import resource
@@ -230,8 +232,8 @@ def main():
     # step_rewards = [[] for _ in range(num_worker)]
     global_ep = 0
 
-
     while True:
+        rollout_timer = time.time()
 
         # print("[+]", get_size(agent))
         # print("[+]", get_size(drn_model)/1000000, "MB")
@@ -252,18 +254,18 @@ def main():
         #     print(option_handler.options)
         #     exit()
 
-
         # Step 1. n-step rollout
         for cur_step in range(num_step):
+            #yappi.start()
+            step_timer = time.time()
+
             actions = [None for i in range(len(parent_conns))]
             for i, parent_conn in enumerate(parent_conns):
 
                 if current_option[i] is None:
                     current_option[i] = agent.act(states[i], option_handler)
                     assert np.all(np.isfinite(states[i]))
-                    action = current_option[i].act(states[i])
-                else:
-                    action = current_option[i].act(states[i])
+                action = current_option[i].act(states[i])
                 actions[i] = action
                 parent_conn.send(action)
 
@@ -322,7 +324,6 @@ def main():
                 log_rewards.append(lr)
                 next_obs.append(s)
 
-
             next_states = np.stack(next_states)
 
             # rewards = np.hstack(rewards)
@@ -364,7 +365,9 @@ def main():
 
 
             # writer.add_scalar('data/avg_reward_per_step', np.mean(rewards), global_step + num_worker * (cur_step - num_step))
-
+            print("Current num-step of rollout: " + str(cur_step) + ", Time of step: " + str(time.time() - step_timer))
+            #yappi.get_func_stats().print_all()
+        print("Finished n-step rollout, time: " + str(time.time() - rollout_timer))
         # while all(episode_rewards):
         #     global_ep += 1
         #     avg_ep_reward = np.mean([env_ep_rewards.pop(0) for env_ep_rewards in episode_rewards])

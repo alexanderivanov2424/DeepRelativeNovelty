@@ -56,8 +56,8 @@ class PPOAgent(object):
                  obs_n_channels,
                  n_actions,
                  lr=2.5e-4,
-                 update_interval=16*8, #128*8
-                 batchsize=32*8, #32*8
+                 update_interval=128*8,
+                 batchsize=32*8,
                  epochs=4,
                  device_id=0):
 

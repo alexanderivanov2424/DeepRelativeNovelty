@@ -72,6 +72,12 @@ class OptionHandler:
             return True
         return False
 
+    def is_subgoal_in_prev_options(self, subgoal):
+        for option in self.options:
+            if not option.is_global_option and option.is_in_term_set(subgoal):
+                return True
+        return False
+
     def create_new_option(self, name, is_global=False):
         if is_global:
             option = Option(termination_set=None, state_dim=self.state_dim, action_dim=self.action_dim, buffer_length=self.buffer_length,
@@ -86,13 +92,18 @@ class OptionHandler:
 
             _, _, _, freq_vals, I = self.drn_model.get_latest_subgoals()
 
+            # filter subgoals for those that are not in the termination set of previous options
+            valid_subgoals = np.array([self.is_subgoal_in_prev_options(subgoal) for subgoal in traj[I]])
+            I = I[valid_subgoals]
+            freq_vals = freq_vals[valid_subgoals]
+
             if len(I) == 0:
                 #option creation failed, no salient event
                 return None
 
-            event_I = I[np.argmax(freq_vals)]
+            event_I = I[np.argmin(freq_vals)]
             window = 5
-            states = traj[event_I-window : event_I + window]
+            states = traj[max(0, event_I-window) : min(len(traj), event_I + window)]
 
             option = Option(termination_set=states, state_dim=self.state_dim, action_dim=self.action_dim,
                                       buffer_length=self.buffer_length,
@@ -102,9 +113,6 @@ class OptionHandler:
                                       name=name,
                                       option_idx=len(self.options),
                                       lr_c=self.lr_c, lr_a=self.lr_a, global_option=self.global_option)
-
-
-
 
             S = np.mean(states, axis=(0,1))
             plt.title("termination set")
