@@ -91,9 +91,12 @@ class OptionHandler:
             traj = self.drn_model.last_trajectory
 
             _, _, _, freq_vals, I = self.drn_model.get_latest_subgoals()
+            if len(I) == 0:
+                return None
 
             # filter subgoals for those that are not in the termination set of previous options
-            valid_subgoals = np.array([self.is_subgoal_in_prev_options(subgoal) for subgoal in traj[I]])
+            valid_subgoals = np.array([not self.is_subgoal_in_prev_options(subgoal) for subgoal in traj[I]])
+            print(valid_subgoals)
             I = I[valid_subgoals]
             freq_vals = freq_vals[valid_subgoals]
 
