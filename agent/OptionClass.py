@@ -3,8 +3,8 @@ import random
 import itertools
 import numpy as np
 from scipy.spatial import distance
-from thundersvm import OneClassSVM, SVC
-# from sklearn.svm import OneClassSVM, SVC
+from thundersvm import SVC #, OneClassSVM
+from sklearn.svm import OneClassSVM#, SVC
 
 from agent.dynamics.mpc import MPC
 
@@ -41,7 +41,7 @@ class Option(object):
         self.gestation_period = gestation_period
 
         self.positive_examples = deque(maxlen=500) #100 * 3136 = 313600
-        self.negative_examples = deque(maxlen=1)
+        self.negative_examples = deque(maxlen=500)
         self.optimistic_classifier = None
         self.pessimistic_classifier = None
 
