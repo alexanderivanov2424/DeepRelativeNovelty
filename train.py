@@ -297,7 +297,7 @@ def main():
                     current_option[i].num_goal_hits += 1
 
                 if rd or option_terminated or option_duration[i] >= 1000:
-                    if len(option_trajectories[i]) > 0 and not current_option[i].is_global_option and not current_option[i].is_in_training_phase():
+                    if len(option_trajectories[i]) > 0 and not current_option[i].is_global_option and current_option[i].is_in_training_phase():
                         print("option update", current_option[i], "traj len:", len(option_trajectories[i]), option_terminated, "|", rd, option_duration[i] >= 1000)
                         traj = [trajectories[i][j] for j in option_trajectories[i]]
                         traj = ((np.stack(traj) - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5)

@@ -147,7 +147,7 @@ class DeepRelNov:
         self.training_buffer = []
 
         self.training_iterations = 0
-        self.pretraining_duration = 500
+        self.pretraining_duration = 10#500
 
 
     def is_drn_trained(self):
@@ -303,7 +303,7 @@ class DeepRelNov:
                 axs[i].set_axis_off()
                 # axs[i].set_title(self.training_iterations)
             fig.savefig("nov-states" + str(self.training_iterations), dpi=1000)
-            
+
             plt.clf()
 
             # for state in trajectory:
