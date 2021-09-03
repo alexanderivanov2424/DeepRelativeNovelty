@@ -3,8 +3,8 @@ import random
 import itertools
 import numpy as np
 from scipy.spatial import distance
-from thundersvm import SVC #, OneClassSVM
-from sklearn.svm import OneClassSVM#, SVC
+from thundersvm import SVC, OneClassSVM
+#from sklearn.svm import OneClassSVM, SVC
 
 from agent.dynamics.mpc import MPC
 

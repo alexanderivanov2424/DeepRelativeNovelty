@@ -147,7 +147,7 @@ class DeepRelNov:
         self.training_buffer = []
 
         self.training_iterations = 0
-        self.pretraining_duration = 10#500
+        self.pretraining_duration = 500
 
 
     def is_drn_trained(self):
