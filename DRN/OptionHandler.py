@@ -68,9 +68,10 @@ class OptionHandler:
 
 
     def should_create_new_option(self):  # TODO: Cleanup
-        if len(self.mature_options) > 0 and len(self.new_options) == 0:
-            return True
         return False
+        # if len(self.mature_options) > 0 and len(self.new_options) == 0:
+        #     return True
+        # return False
 
     def is_subgoal_in_prev_options(self, subgoal):
         for option in self.options:
