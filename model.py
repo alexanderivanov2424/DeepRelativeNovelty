@@ -159,7 +159,7 @@ class CnnActorCriticNetwork(nn.Module):
 
 
 class RNDModel(nn.Module):
-    def __init__(self, input_size, output_size, in_channels=4):
+    def __init__(self, input_size, output_size, in_channels=1):
         super(RNDModel, self).__init__()
 
         self.input_size = input_size

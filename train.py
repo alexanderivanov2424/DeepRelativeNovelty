@@ -7,6 +7,7 @@ import numpy as np
 from tensorboardX import SummaryWriter
 from torch.multiprocessing import Pipe
 from collections import deque
+import pickle
 
 from agents import *
 from config import *
@@ -64,6 +65,10 @@ def dump_garbage():
         if len(s) > 80:
             s = s[:80]
         print(type(x),"\n  ", s)
+
+def destack(traj):
+    return np.expand_dims(traj[:, -1, :, :], 1)
+
 
 def main():
 
@@ -157,7 +162,7 @@ def main():
     input_size = (4, 84, 84)
 
     agent = DRNAgent(input_size, output_size)
-    drn_model = DeepRelNov(agent.rnd, False, input_size, output_size, use_cuda=use_cuda)
+    drn_model = DeepRelNov(agent.rnd, False, (1, 84, 84), output_size, use_cuda=use_cuda)
     option_handler = OptionHandler(drn_model, len(input_size), output_size, torch.device)
 
 
@@ -216,7 +221,7 @@ def main():
             # next_obs.append(s[-1, :, :].reshape([1, 84, 84]))
             if rd:
                 traj = ((np.stack(trajectories[i]) - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5)
-                drn_model.train_rel_nov(traj)
+                drn_model.train_rel_nov(destack(traj))
                 trajectories[i].clear()
             next_obs.append(s)
             trajectories[i].append(s)
@@ -283,7 +288,7 @@ def main():
 
                 # print("updating option", current_option[i])
                 if current_option[i].is_global_option:
-                    int_reward = agent.compute_intrinsic_reward([s])[0]
+                    int_reward = agent.compute_intrinsic_reward([[s[-1]]])[0]
                     option_handler.update(states[i], actions[i], r + int_reward, s, option_terminated, current_option[i])
                 else:
                     int_reward = OPTION_SUCESS_REWARD if option_terminated else 0
@@ -311,7 +316,20 @@ def main():
 
                 if rd:
                     traj = ((np.stack(trajectories[i]) - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5)
-                    drn_model.train_rel_nov(traj)
+                    drn_model.train_rel_nov(destack(traj))
+                    first_nov_vals = drn_model.get_nov_vals(destack(np.array(trajectories[i]))[:5])
+                    print(first_nov_vals)
+
+                    # I = np.argmin(drn_model.get_nov_vals(destack(np.array(trajectories[i]))))
+                    # img = trajectories[i][I]
+                    # plt.imshow(np.reshape(img[-1],(84,84)))
+                    # plt.draw()
+                    # plt.pause(.001)
+                    # plt.cla()
+
+                    # with open('RND1_data.pickle', 'ab') as handle:
+                    #     pickle.dump(first_nov_vals, handle)
+
                     trajectories[i].clear()
 
                 trajectories[i].append(s)
@@ -365,9 +383,10 @@ def main():
 
 
             # writer.add_scalar('data/avg_reward_per_step', np.mean(rewards), global_step + num_worker * (cur_step - num_step))
-            print("Current num-step of rollout: " + str(cur_step) + ", Time of step: " + str(time.time() - step_timer))
+            # print("Current num-step of rollout: " + str(cur_step) + ", Time of step: " + str(time.time() - step_timer))
             #yappi.get_func_stats().print_all()
-        print("Finished n-step rollout, time: " + str(time.time() - rollout_timer))
+
+        # print("Finished n-step rollout, time: " + str(time.time() - rollout_timer))
         # while all(episode_rewards):
         #     global_ep += 1
         #     avg_ep_reward = np.mean([env_ep_rewards.pop(0) for env_ep_rewards in episode_rewards])
@@ -437,7 +456,7 @@ def main():
         total_next_obs -= obs_rms.mean
         total_next_obs /= np.sqrt(obs_rms.var)
         total_next_obs = total_next_obs.clip(-5, 5)
-        drn_model.nov_rnd.train(total_next_obs)
+        drn_model.nov_rnd.train(destack(total_next_obs))
         # drn_model.nov_rnd.train(((total_next_obs - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5))
 
         # agent.train_model(np.float32(total_state) / 255., ext_target, int_target, total_action,
