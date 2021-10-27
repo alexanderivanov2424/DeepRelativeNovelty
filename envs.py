@@ -1,6 +1,5 @@
 import gym
 import cv2
-import sys
 
 import numpy as np
 
@@ -12,7 +11,6 @@ from torch.multiprocessing import Pipe, Process
 
 from model import *
 from config import *
-from utils import *
 from PIL import Image
 
 train_method = default_config['TrainMethod']
@@ -46,8 +44,6 @@ def unwrap(env):
         return unwrap(env.leg_env)
     else:
         return env
-
-
 
 
 class MaxAndSkipEnv(gym.Wrapper):
@@ -117,6 +113,7 @@ class MontezumaInfoWrapper(gym.Wrapper):
     def reset(self):
         return self.env.reset()
 
+
 class AtariEnvironment(Environment):
     def __init__(
             self,
@@ -135,7 +132,6 @@ class AtariEnvironment(Environment):
         self.env = MaxAndSkipEnv(gym.make(env_id), is_render)
         if 'Montezuma' in env_id:
             self.env = MontezumaInfoWrapper(self.env, room_address=3 if 'Montezuma' in env_id else 1)
-
         self.env_id = env_id
         self.is_render = is_render
         self.env_idx = env_idx
@@ -203,7 +199,6 @@ class AtariEnvironment(Environment):
         s = self.env.reset()
         self.get_init_state(
             self.pre_proc(s))
-
         return self.history[:, :, :]
 
     def pre_proc(self, X):

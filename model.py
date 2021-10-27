@@ -81,6 +81,12 @@ class CnnActorCriticNetwork(nn.Module):
         else:
             linear = nn.Linear
 
+        """
+        Moved Flatten() to be outside of nn.Sequential so that there is a reference to the flatten layer
+        This is needed to setup the hook to extract features.
+        """
+        self.flatten = Flatten()
+
         self.feature = nn.Sequential(
             nn.Conv2d(
                 in_channels=4,
@@ -100,7 +106,7 @@ class CnnActorCriticNetwork(nn.Module):
                 kernel_size=3,
                 stride=1),
             nn.ReLU(),
-            Flatten(),
+            self.flatten,
             linear(
                 7 * 7 * 64,
                 256),
@@ -150,6 +156,17 @@ class CnnActorCriticNetwork(nn.Module):
                 init.orthogonal_(self.extra_layer[i].weight, 0.1)
                 self.extra_layer[i].bias.data.zero_()
 
+        self.feature_output = None
+        def hook(model, input, output):
+            self.feature_output = output.detach()
+        self.flatten.register_forward_hook(hook)
+
+    def get_features(self, obs):
+        self.agent.model.eval()
+        self.agent.act(obs)
+        self.agent.model.train()
+        return np.array(self.feature_output)
+
     def forward(self, state):
         x = self.feature(state)
         policy = self.actor(x)
@@ -159,17 +176,16 @@ class CnnActorCriticNetwork(nn.Module):
 
 
 class RNDModel(nn.Module):
-    def __init__(self, input_size, output_size, in_channels=1):
+    def __init__(self, input_size, output_size):
         super(RNDModel, self).__init__()
 
         self.input_size = input_size
         self.output_size = output_size
-        self.input_channels = in_channels
 
         feature_output = 7 * 7 * 64
         self.predictor = nn.Sequential(
             nn.Conv2d(
-                in_channels=self.input_channels,
+                in_channels=1,
                 out_channels=32,
                 kernel_size=8,
                 stride=4),
@@ -196,7 +212,7 @@ class RNDModel(nn.Module):
 
         self.target = nn.Sequential(
             nn.Conv2d(
-                in_channels=self.input_channels,
+                in_channels=1,
                 out_channels=32,
                 kernel_size=8,
                 stride=4),
